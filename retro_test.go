@@ -4,6 +4,8 @@ import (
 	"errors"
 	"regexp"
 	"testing"
+
+	retro "github.com/codeship/go-retro"
 )
 
 type stubRetryableError struct {
@@ -51,7 +53,7 @@ func TestRetryHandlerTryNonRetryable(t *testing.T) {
 
 func TestRetryHandlerTryRetryable(t *testing.T) {
 	handler := &retryHandler{}
-	receivedCounts := []int{}
+	receivedCounts := []int{0}
 	baseError := errors.New("foobar")
 	retryableError := &stubRetryableError{
 		baseError,
@@ -68,19 +70,17 @@ func TestRetryHandlerTryRetryable(t *testing.T) {
 	if !retry {
 		t.Errorf("retry was false, expected true")
 	}
-	if receivedCounts[0] != 0 {
-		t.Errorf("receivedCounts[0] was %d, expected %d", receivedCounts[0], 0)
+	if receivedCounts[1] != 1 {
+		t.Errorf("receivedCounts[1] was %d, expected %d", receivedCounts[1], 1)
 	}
-	if len(receivedCounts) != 1 {
+	if len(receivedCounts) != 2 {
 		t.Errorf("len(receivedCounts) was %d, expected %d", len(receivedCounts), 1)
 	}
 	if err != retryableError {
 		t.Errorf("error was %s, expected %s", err.Error(), retryableError.Error())
 	}
+
 	retry, err = handler.Try(retryableFunc)
-	if !retry {
-		t.Errorf("retry was false, expected true")
-	}
 	if receivedCounts[1] != 1 {
 		t.Errorf("receivedCounts[1] was %d, expected %d", receivedCounts[1], 1)
 	}
@@ -105,7 +105,7 @@ func TestRetryHandlerTryRetryable(t *testing.T) {
 
 func TestRetryHandlerTryRetryableEventualSuccess(t *testing.T) {
 	handler := &retryHandler{}
-	receivedCounts := []int{}
+	receivedCounts := []int{0}
 	baseError := errors.New("foobar")
 	retryableError := &stubRetryableError{
 		baseError,
@@ -129,7 +129,7 @@ func TestRetryHandlerTryRetryableEventualSuccess(t *testing.T) {
 		t.Errorf("receivedCounts[0] was %d, expected %d", receivedCounts[0], 0)
 	}
 
-	if len(receivedCounts) != 1 {
+	if len(receivedCounts) != 2 {
 		t.Errorf("len(receivedCounts) was %d, expected %d", len(receivedCounts), 1)
 	}
 	if err != retryableError {
@@ -139,7 +139,7 @@ func TestRetryHandlerTryRetryableEventualSuccess(t *testing.T) {
 	if retry {
 		t.Errorf("retry was true, expected false")
 	}
-	if len(receivedCounts) != 1 {
+	if len(receivedCounts) != 2 {
 		t.Errorf("len(receivedCounts) was %d, expected %d", len(receivedCounts), 1)
 	}
 	if err != nil {
@@ -149,7 +149,7 @@ func TestRetryHandlerTryRetryableEventualSuccess(t *testing.T) {
 
 func TestRetryHandlerTryRetryableEventualFailure(t *testing.T) {
 	handler := &retryHandler{}
-	receivedCounts := []int{}
+	receivedCounts := []int{0}
 	baseError := errors.New("foobar")
 	retryableError := &stubRetryableError{
 		baseError,
@@ -172,7 +172,7 @@ func TestRetryHandlerTryRetryableEventualFailure(t *testing.T) {
 	if receivedCounts[0] != 0 {
 		t.Errorf("receivedCounts[0] was %d, expected %d", receivedCounts[0], 0)
 	}
-	if len(receivedCounts) != 1 {
+	if len(receivedCounts) != 2 {
 		t.Errorf("len(receivedCounts) was %d, expected %d", len(receivedCounts), 1)
 	}
 	if err != retryableError {
@@ -182,7 +182,7 @@ func TestRetryHandlerTryRetryableEventualFailure(t *testing.T) {
 	if retry {
 		t.Errorf("retry was true, expected false")
 	}
-	if len(receivedCounts) != 1 {
+	if len(receivedCounts) != 2 {
 		t.Errorf("len(receivedCounts) was %d, expected %d", len(receivedCounts), 1)
 	}
 	if err != baseError {
@@ -328,5 +328,27 @@ func TestLogarithmicRetryableError(t *testing.T) {
 	}
 	if maxAttempts != err.MaxAttempts() {
 		t.Errorf("Incorrect MaxAttempts returned, expected %d, received %d", maxAttempts, err.MaxAttempts())
+	}
+}
+
+func TestRetryHandlerReachMaxTriesSuccess(t *testing.T) {
+	maxAttempts := 3
+	i := 0
+	baseErr := errors.New("error: maxAttempts reached anyway")
+	err := retro.NewStaticRetryableError(baseErr, maxAttempts, 0)
+
+	errAfterRetry := retro.DoWithRetry(func() error {
+		i++
+		if i > maxAttempts+1 {
+			t.Error("Max attempts reached suddenly")
+		}
+		return err
+	})
+
+	if errAfterRetry == nil {
+		t.Errorf("Expecting %v", baseErr)
+	}
+	if i != maxAttempts+1 {
+		t.Errorf("Incorrect computed MaxAttempts returned, expected %d, received %d", maxAttempts, i)
 	}
 }

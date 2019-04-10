@@ -101,11 +101,11 @@ type retryHandler struct {
 func (handler *retryHandler) Try(f func() error) (bool, error) {
 	err := f()
 	if errRetry, ok := err.(RetryableError); ok {
+		handler.attempts++
 		retrying := handler.attempts < errRetry.MaxAttempts()
 		if retrying {
 			errRetry.Wait(handler.attempts)
 		}
-		handler.attempts++
 		return retrying, errRetry
 	}
 	return false, err

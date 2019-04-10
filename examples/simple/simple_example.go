@@ -15,6 +15,9 @@ var (
 
 	// ErrKeyExists is returned when a key is re-used. This error is retryable and will retry 5 times without sleeping
 	ErrKeyExists = retro.NewStaticRetryableError(errors.New("error: key exists"), 5, 0)
+
+	// ErrGenNewKey is returned when for some strange reasons the uuid4 value returns an error
+	ErrGenNewKey = errors.New("error: failed to generate uuid")
 )
 
 // Stores all ints from 0-99 under random unique keys in a map
@@ -38,7 +41,12 @@ func storeInt(data map[string]int, i int) error {
 		return ErrNilMap
 	}
 
-	key := uuid.NewV4().String()
+	uuidValue, err := uuid.NewV4()
+	if err != nil {
+		return ErrGenNewKey
+	}
+
+	key := uuidValue.String()
 	_, ok := data[key]
 	if ok {
 		return ErrKeyExists
